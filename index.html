@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ASCII Lyrics Video</title>
+    <style>
+      :root {
+        --color: rgb(255, 255, 255);
+        --brightness: 1;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #000;
+        overflow: hidden;
+      }
+      #output {
+        text-align: center;
+        font-family: "SF Mono", "Cascadia Mono", Consolas, monospace;
+        white-space: nowrap;
+        background: #000;
+        font-size: 10px;
+        line-height: 0.82;
+        letter-spacing: 0;
+        font-weight: 700;
+        filter: drop-shadow(
+            0 0 7rem color-mix(in srgb, var(--color), transparent 20%)
+          )
+          brightness(var(--brightness));
+      }
+      #prerender,
+      #video {
+        display: none;
+      }
+      #startButton {
+        position: fixed;
+        z-index: 20;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        padding: 12px 24px;
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.85);
+        color: #fff;
+        font:
+          600 14px Arial,
+          sans-serif;
+        cursor: pointer;
+      }
+      #startButton.hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="output"></div>
+    <canvas id="prerender" width="150" height="50"></canvas>
+
+    <audio id="music" src="song.mp3" preload="auto"></audio>
+    <video
+      id="video"
+      src="video-ascii.mp4"
+      preload="auto"
+      muted
+      playsinline
+    ></video>
+
+    <button id="startButton">▶ PLAY</button>
+
+    <script>
+      (() => {
+        const config = {
+          /*
+      Pengaturan lirik agar lebih jelas dan rapi.
+      Ukuran canvas lirik dibuat lebih tinggi dan lebar.
+    */
+          lyricWidth: 180,
+          lyricHeight: 70,
+
+          lyrics: [
+            { start: 4.0, end: 9.0, text: "I" },
+            { start: 9.0, end: 15.0, text: "Know a place" },
+            { start: 15.0, end: 16.0, text: "It's somewhere I go" },
+            {
+              start: 16.0,
+              end: 23.0,
+              text: "when I need to remember your face",
+            },
+            { start: 23.0, end: 29.0, text: "We get married" },
+            { start: 29.0, end: 34.0, text: "in our heads" },
+            {
+              start: 34.0,
+              end: 39.0,
+              text: "Something to do whilst we try to recall",
+            },
+            { start: 39.0, end: 43.0, text: "How we met" },
+
+            // Do you think I have forgotten? = VIDEO ASCII
+            { start: 43.0, end: 59.0, video: true },
+
+            { start: 59.0, end: 61.05, text: "About you?" },
+          ],
+
+          videoStart: 43.0,
+          videoEnd: 59.0,
+          loop: true,
+
+          videoWidth: 120,
+          videoHeight: 50,
+
+          asciiChars: " .,:;irsXA253hMHGS#9B&@",
+        };
+
+        const output = document.getElementById("output");
+        const canvas = document.getElementById("prerender");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        const music = document.getElementById("music");
+        const video = document.getElementById("video");
+        const button = document.getElementById("startButton");
+
+        const videoCanvas = document.createElement("canvas");
+        const videoCtx = videoCanvas.getContext("2d", {
+          willReadFrequently: true,
+        });
+
+        /*
+    ============================================================
+    FIX UTAMA:
+    ASCII lirik sekarang dibuat SATU KALI setiap kali lirik berubah.
+    Tidak dibuat ulang setiap requestAnimationFrame.
+
+    Jadi karakter tidak random setiap frame dan teks tidak bergetar.
+    ============================================================
+  */
+
+        /*
+    Karakter lirik dipilih dari karakter yang relatif jelas
+    ketika dibaca sebagai bentuk huruf.
+  */
+        const textChars = [" ", ".", ":", "*", "o", "O", "0", "#", "@", "%"];
+
+        let lastItem = null;
+        let cachedLyricHTML = "";
+        let cachedColor = "rgb(255,255,255)";
+        let running = false;
+
+        function getCurrentItem(time) {
+          return (
+            config.lyrics.find(
+              (item) => time >= item.start && time < item.end,
+            ) || null
+          );
+        }
+
+        /*
+    Membuat ASCII lirik sekali saja.
+    Random character hanya dipilih ketika lirik berubah.
+  */
+        function buildLyricASCII(text) {
+          /*
+      Canvas khusus lirik dibuat lebih besar supaya bentuk huruf
+      tidak terlalu pecah.
+    */
+          const w = config.lyricWidth;
+          const h = config.lyricHeight;
+
+          if (canvas.width !== w || canvas.height !== h) {
+            canvas.width = w;
+            canvas.height = h;
+          }
+
+          ctx.fillStyle = "#000";
+          ctx.fillRect(0, 0, w, h);
+
+          ctx.fillStyle = "#fff";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          /*
+      Font lebih tebal dan sedikit lebih kecil agar bentuk
+      huruf tetap terbaca ketika dikonversi ke ASCII.
+    */
+          ctx.font = '900 16px "Arial Black",Impact,sans-serif';
+
+          const words = text.split(" ");
+          const lines = [];
+          let line = words[0] || "";
+
+          for (let i = 1; i < words.length; i++) {
+            const candidate = line + " " + words[i];
+
+            if (ctx.measureText(candidate).width < w - 10) {
+              line = candidate;
+            } else {
+              lines.push(line);
+              line = words[i];
+            }
+          }
+
+          lines.push(line);
+
+          const lineHeight = 17;
+          const totalHeight = lines.length * lineHeight;
+          const startY = h / 2 - totalHeight / 2 + lineHeight / 2;
+
+          for (let i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], w / 2, startY + i * lineHeight);
+          }
+
+          const data = ctx.getImageData(0, 0, w, h).data;
+          let html = "";
+
+          for (let y = 0; y < h; y++) {
+            let row = "";
+
+            for (let x = 0; x < w; x++) {
+              const i = (x + y * w) * 4;
+              const r = data[i];
+              const g = data[i + 1];
+              const b = data[i + 2];
+
+              const brightness = (r + g + b) / 3;
+
+              /*
+          Hilangkan karakter noise pada area hitam.
+          Ini membuat bentuk lirik lebih bersih.
+        */
+              if (brightness < 35) {
+                row += "<span>&nbsp;</span>";
+                continue;
+              }
+
+              const normalized = (brightness - 35) / 220;
+
+              const index = Math.min(
+                textChars.length - 1,
+                Math.max(0, Math.floor(textChars.length * normalized)),
+              );
+
+              const result = textChars[index];
+
+              /*
+          Random hanya terjadi di sini.
+          Karena fungsi ini hanya dipanggil saat lirik berubah,
+          karakter akan tetap stabil.
+        */
+              const char = Array.isArray(result)
+                ? result[Math.floor(Math.random() * result.length)]
+                : result;
+
+              row += `<span style="color:rgb(${r},${g},${b})">${char || "&nbsp;"}</span>`;
+            }
+
+            html += `<div>${row}</div>`;
+          }
+
+          cachedLyricHTML = html;
+          cachedColor = `rgb(${data[0]},${data[1]},${data[2]})`;
+        }
+
+        function showLyric(item) {
+          if (!item || !item.text) return;
+
+          buildLyricASCII(item.text);
+
+          output.innerHTML = cachedLyricHTML;
+          output.style.setProperty("--color", cachedColor);
+        }
+
+        function drawVideoASCII() {
+          if (video.readyState < 2 || !video.videoWidth) return;
+
+          const w = config.videoWidth;
+          const h = config.videoHeight;
+
+          if (videoCanvas.width !== w || videoCanvas.height !== h) {
+            videoCanvas.width = w;
+            videoCanvas.height = h;
+          }
+
+          videoCtx.drawImage(video, 0, 0, w, h);
+
+          const data = videoCtx.getImageData(0, 0, w, h).data;
+          const chars = config.asciiChars;
+
+          let html = "";
+
+          for (let y = 0; y < h; y++) {
+            let row = "";
+
+            for (let x = 0; x < w; x++) {
+              const i = (x + y * w) * 4;
+
+              const r = data[i];
+              const g = data[i + 1];
+              const b = data[i + 2];
+
+              const brightness = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+              const index = Math.min(
+                chars.length - 1,
+                Math.floor((brightness / 255) * chars.length),
+              );
+
+              row += `<span style="color:rgb(${r},${g},${b})">${chars[index]}</span>`;
+            }
+
+            html += `<div>${row}</div>`;
+          }
+
+          output.innerHTML = html;
+
+          output.style.setProperty(
+            "--color",
+            `rgb(${data[0]},${data[1]},${data[2]})`,
+          );
+        }
+
+        function syncVideo() {
+          const target = music.currentTime - config.videoStart;
+          const duration = video.duration || 7.733333;
+
+          if (target >= 0) {
+            const position = target % duration;
+
+            if (Math.abs(video.currentTime - position) > 0.08) {
+              video.currentTime = position;
+            }
+          }
+
+          if (running && video.paused) {
+            video.play().catch(() => {});
+          }
+        }
+
+        function render() {
+          const time = music.currentTime;
+          const item = getCurrentItem(time);
+
+          /*
+      Hanya ketika item berubah, render ulang lirik.
+    */
+          if (item !== lastItem) {
+            lastItem = item;
+
+            if (item && item.video) {
+              cachedLyricHTML = "";
+              output.innerHTML = "";
+              video.play().catch(() => {});
+            } else if (item && item.text) {
+              video.pause();
+              showLyric(item);
+            } else {
+              video.pause();
+              output.innerHTML = "";
+            }
+          }
+
+          /*
+      Video memang harus dirender setiap frame.
+    */
+          if (item && item.video) {
+            syncVideo();
+            drawVideoASCII();
+          }
+
+          requestAnimationFrame(render);
+        }
+
+        button.addEventListener("click", async () => {
+          try {
+            await music.play();
+            running = true;
+            button.classList.add("hidden");
+          } catch (e) {
+            console.error(e);
+          }
+        });
+
+        music.addEventListener("pause", () => {
+          running = false;
+          video.pause();
+        });
+
+        music.addEventListener("play", () => {
+          running = true;
+        });
+
+        music.addEventListener("ended", () => {
+          if (config.loop) {
+            music.currentTime = 0;
+            lastItem = null;
+            music.play().catch(() => {});
+          }
+        });
+
+        music.addEventListener("seeking", () => {
+          lastItem = null;
+        });
+
+        requestAnimationFrame(render);
+      })();
+    </script>
+  </body>
+</html>
