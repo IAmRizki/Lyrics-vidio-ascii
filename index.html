@@ -9,7 +9,8 @@
     <title>ASCII Lyrics Video</title>
     <style>
       :root {
-        --color: rgb(255, 255, 255) --brightness: 1;
+        --color: rgb(255, 255, 255);
+        --brightness: 1;
       }
       * {
         box-sizing: border-box;
@@ -257,13 +258,8 @@
       Canvas khusus lirik dibuat lebih besar supaya bentuk huruf
       tidak terlalu pecah.
     */
-          const w = config.lyricWidth;
-          const h = config.lyricHeight;
-
-          if (canvas.width !== w || canvas.height !== h) {
-            canvas.width = w;
-            canvas.height = h;
-          }
+          const w = canvas.width;
+          const h = canvas.height;
 
           ctx.fillStyle = "#000";
           ctx.fillRect(0, 0, w, h);
@@ -462,7 +458,6 @@
           window.addEventListener("resize", () => {
             lastItem = null;
           });
-
           window.addEventListener("orientationchange", () => {
             setTimeout(() => {
               lastItem = null;
