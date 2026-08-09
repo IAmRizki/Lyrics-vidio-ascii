@@ -2,12 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <title>ASCII Lyrics Video</title>
     <style>
       :root {
-        --color: rgb(255, 255, 255);
-        --brightness: 1;
+        --color: rgb(255, 255, 255) --brightness: 1;
       }
       * {
         box-sizing: border-box;
@@ -61,6 +63,74 @@
       }
       #startButton.hidden {
         display: none;
+      }
+      /* ================================
+   RESPONSIVE HP & COMPUTER
+   ================================ */
+
+      /* HP */
+      @media (max-width: 600px) {
+        body {
+          width: 100vw;
+          height: 100dvh;
+          padding: env(safe-area-inset-top) env(safe-area-inset-right)
+            env(safe-area-inset-bottom) env(safe-area-inset-left);
+        }
+
+        .container {
+          width: 100vw;
+          height: 100dvh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        #output {
+          width: 100vw;
+          max-width: 100vw;
+
+          /*
+      Ukuran ASCII otomatis mengecil
+      mengikuti lebar HP
+    */
+          font-size: clamp(3.5px, 1.8vw, 7px);
+
+          line-height: 0.78;
+          overflow: hidden;
+        }
+
+        #startButton {
+          padding: 11px 20px;
+          font-size: 13px;
+        }
+      }
+
+      /* ================================
+   LAPTOP / COMPUTER
+   ================================ */
+
+      @media (min-width: 601px) {
+        #output {
+          width: min(100vw, 1100px);
+
+          /*
+      Ukuran ASCII mengikuti
+      ukuran monitor
+    */
+          font-size: clamp(6px, 0.8vw, 10px);
+
+          line-height: 0.82;
+        }
+      }
+
+      /* ================================
+   HP LANDSCAPE
+   ================================ */
+
+      @media (orientation: landscape) and (max-height: 500px) {
+        #output {
+          font-size: clamp(3.5px, 1.25vh, 7px);
+        }
       }
     </style>
   </head>
@@ -169,6 +239,20 @@
     Random character hanya dipilih ketika lirik berubah.
   */
         function buildLyricASCII(text) {
+          const mobile = window.innerWidth <= 600;
+
+          const lyricWidth = mobile
+            ? Math.min(180, Math.max(120, Math.floor(window.innerWidth * 0.72)))
+            : 180;
+
+          const lyricHeight = mobile
+            ? Math.min(70, Math.max(45, Math.floor(window.innerHeight * 0.16)))
+            : 70;
+
+          if (canvas.width !== lyricWidth || canvas.height !== lyricHeight) {
+            canvas.width = lyricWidth;
+            canvas.height = lyricHeight;
+          }
           /*
       Canvas khusus lirik dibuat lebih besar supaya bentuk huruf
       tidak terlalu pecah.
@@ -374,6 +458,16 @@
             syncVideo();
             drawVideoASCII();
           }
+
+          window.addEventListener("resize", () => {
+            lastItem = null;
+          });
+
+          window.addEventListener("orientationchange", () => {
+            setTimeout(() => {
+              lastItem = null;
+            }, 150);
+          });
 
           requestAnimationFrame(render);
         }
